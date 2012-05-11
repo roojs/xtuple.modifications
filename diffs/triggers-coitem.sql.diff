@@ -1,0 +1,157 @@
+--- original/triggers-coitem.sql	2012-05-11 13:36:20.000000000 +0800
++++ triggers-coitem.sql	2012-05-11 14:11:05.000000000 +0800
+@@ -1,3 +1,8 @@
++-- NOTE - only soitemAfterTrigger has been changed.
++-- The key change is related to non-destructive kit part exploding.
++
++
++
+ CREATE OR REPLACE FUNCTION _soitemTrigger() RETURNS TRIGGER AS $$
+ -- Copyright (c) 1999-2012 by OpenMFG LLC, d/b/a xTuple. 
+ -- See www.xtuple.com/CPAL for the full text of the software license.
+@@ -524,6 +529,8 @@
+   _result INTEGER;
+   _coitemid INTEGER;
+   _itemsrcid INTEGER;
++  _mustdelete INTEGER;
++  _subnumber INTEGER;  
+ 
+ BEGIN
+ 
+@@ -578,23 +585,84 @@
+       END IF;
+     END IF;
+     IF (TG_OP = 'UPDATE') THEN
++    
++    
+       IF (NEW.coitem_qtyord <> OLD.coitem_qtyord) THEN
+   -- Recreate Sub Lines for Kit Components
++  
++        
++        SELECT explodeKitMustDelete(
++        
++            NEW.coitem_cohead_id, NEW.coitem_linenumber,
++            0, NEW.coitem_itemsite_id
++        ) INTO _mustdelete;
++  
++    
++    
+       FOR _coitemid IN
+         SELECT coitem_id
+         FROM coitem
+-        WHERE ( (coitem_cohead_id=OLD.coitem_cohead_id)
+-          AND   (coitem_linenumber=OLD.coitem_linenumber)
+-          AND   (coitem_subnumber > 0) )
++                WHERE
++                    (
++                        (coitem_cohead_id=OLD.coitem_cohead_id)
++                        AND
++                        (coitem_linenumber=OLD.coitem_linenumber)
++                        AND
++                        (coitem_subnumber > 0)
++                    )
+         LOOP
++        
++          --SELECT deleteSoItem(_coitemid) INTO _result;
++            IF (_mustdelete > 0) THEN
+           SELECT deleteSoItem(_coitemid) INTO _result;
++            ELSE
++                -- if not delete, see if we could...
++                BEGIN
++                    SELECT deleteSoItemCheck(_coitemid) INTO _result;
++                EXCEPTION WHEN OTHERS THEN
++                    _result := 0;
++                    RAISE NOTICE 'ok to delete';
++
++                END;
++            END IF;
+           IF (_result < 0) THEN
+-             RAISE EXCEPTION 'Error deleting kit components: deleteSoItem(integer) Error:%', _result;
++               RAISE EXCEPTION 'Error deleting kit components: deleteSoItemCheck(integer) Error:%', _result;
+           END IF;
++            
+         END LOOP;
+ 
+-        PERFORM explodeKit(NEW.coitem_cohead_id, NEW.coitem_linenumber, 0, NEW.coitem_itemsite_id,
+-                           NEW.coitem_qtyord, NEW.coitem_scheddate, NEW.coitem_promdate);
++            -- at this point we have not deleted anything..
++            -- we have checked that it is feasible though..
++            
++            
++        SELECT explodeKit(
++        
++                NEW.coitem_cohead_id, NEW.coitem_linenumber,
++                0, NEW.coitem_itemsite_id,
++                
++                NEW.coitem_qtyord, NEW.coitem_scheddate,
++                NEW.coitem_promdate
++            ) INTO  _subnumber;
++        
++        IF (_mustdelete < 1) THEN
++            -- if we where updating.. then trash all the extra lines..
++            -- we can ignore results, as we know it will work based on the check above..
++            PERFORM deleteSoItem(coitem_id) 
++                FROM coitem
++                WHERE
++                    (
++                        (coitem_cohead_id=OLD.coitem_cohead_id)
++                        AND
++                        (coitem_linenumber=OLD.coitem_linenumber)
++                        AND
++                        (coitem_subnumber > _subnumber)
++                    );
++        END IF;
++        
++                       
++                             
++                             
++                           
+       END IF;
+       IF ( (NEW.coitem_qtyord <> OLD.coitem_qtyord) OR
+            (NEW.coitem_cos_accnt_id <> OLD.coitem_cos_accnt_id) ) THEN
+@@ -610,14 +678,6 @@
+             AND (coitem_subnumber > 0));
+         END IF;
+       END IF;
+-      IF (NEW.coitem_scheddate <> OLD.coitem_scheddate) THEN
+-  -- Update kit line item Schedule Date
+-        UPDATE coitem
+-        SET coitem_scheddate = NEW.coitem_scheddate
+-        WHERE((coitem_cohead_id=NEW.coitem_cohead_id)
+-          AND (coitem_linenumber = NEW.coitem_linenumber)
+-          AND (coitem_subnumber > 0));
+-      END IF;
+     END IF;
+     IF (TG_OP = 'DELETE') THEN
+   -- Delete Sub Lines for Kit Components
+@@ -630,22 +690,13 @@
+       LOOP
+         SELECT deleteSoItem(_coitemid) INTO _result;
+         IF (_result < 0) THEN
+-          IF NOT (_po AND (_result = -10 OR _result = -20)) THEN
+             RAISE EXCEPTION 'Error deleting kit components: deleteSoItem(integer) Error:%', _result;
+           END IF;
+-        END IF;
+       END LOOP;
+     END IF;
+   END IF;
+ 
+   IF (TG_OP = 'INSERT') THEN
+-    -- Create Purchase Request if flagged to do so
+-    IF ((NEW.coitem_order_type='R') AND (NEW.coitem_order_id=-1)) THEN
+-      SELECT createpr(CAST(cohead_number AS INTEGER), 'S', NEW.coitem_id) INTO NEW.coitem_order_id
+-      FROM cohead
+-      WHERE (cohead_id=NEW.coitem_cohead_id);
+-    END IF;
+-
+     -- Create Purchase Order if flagged to do so
+     IF ((NEW.coitem_order_type='P') AND (NEW.coitem_order_id=-1)) THEN
+       SELECT itemsrc_id INTO _itemsrcid
+@@ -787,7 +838,6 @@
+     UPDATE coitem
+        SET coitem_status = _pstat
+      WHERE((coitem_cohead_id=_rec.coitem_cohead_id)
+-       AND (coitem_linenumber=_rec.coitem_linenumber)
+        AND (coitem_subnumber = 0));
+   END IF;
+ 
