@@ -1,5 +1,3 @@
--- part of the changes for non-destructive kit parts explode
-
 -- Function: deletesoitem(integer)
 
 -- DROP FUNCTION deletesoitem(integer);
