@@ -1,5 +1,5 @@
 --- original/triggers-coitem.sql	2012-05-11 13:36:20.000000000 +0800
-+++ triggers-coitem.sql	2012-05-11 14:50:00.000000000 +0800
++++ triggers-coitem.sql	2012-05-11 15:17:27.000000000 +0800
 @@ -1,3 +1,8 @@
 +-- NOTE - only soitemAfterTrigger has been changed.
 +-- The key change is related to non-destructive kit part exploding.
