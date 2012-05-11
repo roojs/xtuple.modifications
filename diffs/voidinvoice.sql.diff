@@ -1,0 +1,58 @@
+--- original/voidinvoice.sql	2012-05-11 15:03:31.000000000 +0800
++++ voidinvoice.sql	2012-05-11 15:17:27.000000000 +0800
+@@ -1,6 +1,7 @@
++alter table invchead add column invchead_void boolean default false;
++
++
+ CREATE OR REPLACE FUNCTION voidInvoice(INTEGER) RETURNS INTEGER AS $$
+--- Copyright (c) 1999-2012 by OpenMFG LLC, d/b/a xTuple. 
+--- See www.xtuple.com/CPAL for the full text of the software license.
+ DECLARE
+   pInvcheadid ALIAS FOR $1;
+   _glSequence INTEGER := 0;
+@@ -338,6 +339,12 @@
+     WHERE ( (itemsite_costcat_id=costcat_id)
+      AND (itemsite_id=_r.itemsite_id) );
+ 
++
++-- This should also to a invdist reverse...
++    
++
++
++
+   END LOOP;
+ 
+ --  Reopen Billing
+@@ -353,18 +360,29 @@
+   WHERE (cobill_invcitem_id IN (SELECT invcitem_id
+                                 FROM invcitem
+                                 WHERE (invcitem_invchead_id=_p.invchead_id)));
++
++
++--  This stuff is modified from original code..
++
++--  cobmisc_invcnumber=NULL, PRESERVE so it can be used again..
++
+   UPDATE cobmisc
+   SET cobmisc_posted=FALSE,
+-      cobmisc_invcnumber=NULL,
+       cobmisc_invchead_id=NULL
+   WHERE (cobmisc_invchead_id=_p.invchead_id);
+ 
+---  Mark the invoice as voided
++
++--  Mark the invoice as voided - rename - trick the system to rename it.
++  ALTER TABLE invchead DISABLE TRIGGER USER;
++  
+   UPDATE invchead
+   SET invchead_void=TRUE,
+-      invchead_notes=(invchead_notes || 'Voided on ' || current_date || ' by ' || getEffectiveXtUser())
++          invchead_notes=(invchead_notes || 'Voided on ' || current_date || ' by ' || current_user),
++          invchead_invcnumber =  _p.invchead_invcnumber || 'x-' || _p.invchead_id
+   WHERE (invchead_id=_p.invchead_id);
+  
++  ALTER TABLE invchead ENABLE TRIGGER USER;
++ 
+   RETURN _itemlocSeries;
+ 
+ END;
