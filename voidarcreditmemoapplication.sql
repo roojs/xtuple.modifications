@@ -274,7 +274,7 @@ END;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-ALTER FUNCTION postarcreditmemoapplication(integer)
+ALTER FUNCTION voidarcreditmemoapplication(integer)
   OWNER TO admin;
   
   

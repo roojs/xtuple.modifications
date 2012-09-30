@@ -81,7 +81,7 @@ BEGIN
     -- try and void the applicatoins..
     
     PERFORM
-            postarcreditmemoapplication( arapply_id )
+            voidarcreditmemoapplication( arapply_id )
         FROM
             arapply
         WHERE
