@@ -83,7 +83,7 @@ BEGIN
     PERFORM
             postarcreditmemoapplication( arapply_id )
         FROM
-            araply
+            arapply
         WHERE
             arapply_target_aropen_id=_n.aropen_id;
             
@@ -435,3 +435,7 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
+
+ALTER FUNCTION voidInvoice(INTEGER) 
+  OWNER TO admin;
+  
