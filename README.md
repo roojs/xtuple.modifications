@@ -44,8 +44,13 @@ h) netsuite import utilitiy methods / tables.
    
   - x-netsuite-recvgrp.sql  [NEW]
   - x-netsuite-mig-extra.sql [NEW]
+
+i) [REMOVED] was void invoice keeping numbers - this breaks to much..
   
-b) void invoice keeps invoice number so it can be reissued with same number. and
-   renames old invoice with -x-oldid
-  
+j) void invoice with applications
+   This works by creating a fake CM/DM and moves the application to the two fake entries.
+   Note currently does not suport cross currences
+
   - voidinvoice.sql [MODIFIED]
+  - voidapcreditmemoapplication.sql
+

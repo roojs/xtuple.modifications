@@ -1,3 +1,7 @@
+
+-- this is a slightly modified version which tries to retain the
+-- invoice number -- this may not work however...
+
 alter table invchead add column invchead_void boolean default false;
 
 
@@ -25,6 +29,7 @@ DECLARE
   _firstExchDate        DATE;
   _glDate		DATE;
   _exchGain             NUMERIC := 0;
+   
 
 BEGIN
 
@@ -61,12 +66,42 @@ BEGIN
   END IF;
 
 --  Check for ARApplications
-  SELECT arapply_id INTO _test
-  FROM arapply
-  WHERE (arapply_target_aropen_id=_n.aropen_id)
-  LIMIT 1;
+  SELECT
+        arapply_id
+    INTO
+        _test
+    FROM
+        arapply
+    WHERE
+        (arapply_target_aropen_id=_n.aropen_id)
+    LIMIT
+        1;
   IF (FOUND) THEN
-    RETURN -20;
+  
+    -- try and void the applicatoins..
+    
+    PERFORM
+            voidarcreditmemoapplication( arapply_id )
+        FROM
+            arapply
+        WHERE
+            arapply_target_aropen_id=_n.aropen_id;
+            
+        
+    SELECT
+          arapply_id
+      INTO
+          _test
+      FROM
+          arapply
+      WHERE
+          (arapply_target_aropen_id=_n.aropen_id)
+      LIMIT
+          1;
+    IF (FOUND) THEN 
+        RETURN -20;
+    END IF;
+    
   END IF;
 
   SELECT fetchGLSequence() INTO _glSequence;
@@ -366,24 +401,41 @@ BEGIN
 
 --  cobmisc_invcnumber=NULL, PRESERVE so it can be used again..
 
-  UPDATE cobmisc
-  SET cobmisc_posted=FALSE,
-      cobmisc_invchead_id=NULL
-  WHERE (cobmisc_invchead_id=_p.invchead_id);
+-- cobmisc- increase revision (this is used by our FE code to generate a revised invoice number)
 
+ 
+  UPDATE cobmisc
+    SET
+        cobmisc_posted=FALSE,
+        cobmisc_invchead_id=NULL,
+        cobmisc_rev = cobmisc_rev + 1,
+        cobmisc_invcnumber=NULL
+    WHERE (cobmisc_invchead_id=_p.invchead_id);
+
+  UPDATE invchead
+        SET invchead_void=TRUE,
+            invchead_notes=(invchead_notes || 'Voided on ' || current_date || ' by ' || current_user)
+  --        invchead_invcnumber =  _p.invchead_invcnumber || 'x-' || _p.invchead_id
+    WHERE (invchead_id=_p.invchead_id);
+  
 
 --  Mark the invoice as voided - rename - trick the system to rename it.
-  ALTER TABLE invchead DISABLE TRIGGER USER;
+  --ALTER TABLE invchead DISABLE TRIGGER USER;
   
-  UPDATE invchead
-      SET invchead_void=TRUE,
-          invchead_notes=(invchead_notes || 'Voided on ' || current_date || ' by ' || current_user),
-          invchead_invcnumber =  _p.invchead_invcnumber || 'x-' || _p.invchead_id
-      WHERE (invchead_id=_p.invchead_id);
-      
-  ALTER TABLE invchead ENABLE TRIGGER USER;
+  --UPDATE invchead
+  --    SET invchead_void=TRUE,
+  --        invchead_notes=(invchead_notes || 'Voided on ' || current_date || ' by ' || current_user),
+  --        invchead_invcnumber =  _p.invchead_invcnumber || 'x-' || _p.invchead_id
+  --    WHERE (invchead_id=_p.invchead_id);
+  
+    
+  --ALTER TABLE invchead ENABLE TRIGGER USER;
  
   RETURN _itemlocSeries;
 
 END;
 $$ LANGUAGE plpgsql;
+
+ALTER FUNCTION voidInvoice(INTEGER) 
+  OWNER TO admin;
+  
